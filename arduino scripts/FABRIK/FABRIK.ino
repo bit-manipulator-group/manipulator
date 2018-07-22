@@ -1,4 +1,5 @@
 #include<math.h>
+#define PI 3.1415926535
 class Vector3d
 {
     //class to deal with vector operation
@@ -101,45 +102,180 @@ class FABRIK_Solver
     //orientation is expressed : P1, P2, F<--->0, 1, 2
     //index 0 means base, while index 7 means target
     double LengthLink[6];//length of links
+    double AngleLinks[7];
+    double minOffset;
 
     //Vector3d OrientationBase[3];//orientation of the base, should be set as some constant
     Vector3d PositionBase;//position of the base
     //Vector3d OrientationTargrt[3];//orientation of the target
     Vector3d PositionTarget;//position of the target
 
-    double tolorenceValue = 0.01;
+    double tolorenceValue = 3;
 
     //corrention of the orientation
-    void OrientationCorrection(Vector3d* inputN, Vector3d* inputN_1, Vector3d inputOri[3],Vector3d outputOri[3], double linkLength, int jointType)
+    void OrientationCorrection(Vector3d inputN, Vector3d inputN_1, Vector3d inputOri[3],Vector3d outputOri[3], double linkLength, int jointIndex, int jointIndexNext, double* angleOutput)
     {
         //note that constrain should be carefully considered
-        switch (jointType)
+        Vector3d outOriTemp[3];
+        Vector3d outPosTemp;
+        switch (TypeOfJoints[jointIndex])
         {
             case 1:
             {
+                outOriTemp[0]=(inputOri[1].cross(inputN-inputN_1)).normalize();
+                outPosTemp=inputN+linkLength*outOriTemp[0].cross(inputOri[1]);
+                outOriTemp[2]=(inputN-outPosTemp).normalize();
+                outOriTemp[1]=inputOri[1];
+
+                double mod1=sqrt(inputOri[0].dot(inputOri[0]));
+                double mod2=sqrt(outOriTemp[0].dot(outOriTemp[0]));
+                double dotans=inputOri[0].dot(outOriTemp[0]);
+                double angleLocal=acos(dotans/(mod1*mod2));
                 
-                outputOri[0]=inputOri[1].cross(*inputN-*inputN_1);
-                outputOri[0].normalize();
-                *inputN_1=*inputN-linkLength*outputOri[0].cross(inputOri[1]);
-                outputOri[2]=(*inputN-*inputN_1).normalize();
-                outputOri[1]=outputOri[2].cross(outputOri[0]);
+                if(inputOri[0].dot(outOriTemp[2])>0)
+                    angleLocal=-angleLocal;
+
+                if(angleLocal>PI/4 )//if angleLocal>0
+                {
+                    outOriTemp[2]=(inputOri[2]-inputOri[0]).normalize();
+                    outOriTemp[0]=(inputOri[2]+inputOri[0]).normalize();
+                    outPosTemp=inputN+linkLength*outOriTemp[2];
+                    angleLocal=PI/4;
+                }
+                else if(angleLocal<-PI/4)//if angleLocal<0
+                {
+                    outOriTemp[2]=(inputOri[2]+inputOri[0]).normalize();
+                    outOriTemp[0]=(inputOri[2]-inputOri[0]).normalize();
+                    outPosTemp=inputN+linkLength*outOriTemp[2];
+                    angleLocal=-PI/4;
+                }
+
+                *angleOutput=angleLocal;
+                outputOri[0]=outOriTemp[0];   
+                outputOri[2]=outOriTemp[2];
+                outputOri[1]=outOriTemp[1];
+                inputN_1=outPosTemp;
+
                 break;
             }
             case 2:
             {
-                outputOri[0]=inputOri[0].cross(*inputN-*inputN_1);
-                outputOri[0].normalize();
-                *inputN_1=*inputN-linkLength*outputOri[0].cross(inputOri[0]);
-                outputOri[2]=(*inputN-*inputN_1).normalize();
-                outputOri[1]=outputOri[2].cross(outputOri[0]);
+                outOriTemp[1]=(inputOri[0].cross(inputN-inputN_1)).normalize();
+                outPosTemp=inputN+linkLength*outOriTemp[1].cross(inputOri[0]);
+                outOriTemp[2]=(inputN-outPosTemp).normalize();
+                outOriTemp[0]=inputOri[0];
+
+                double mod1=sqrt(inputOri[1].dot(inputOri[1]));
+                double mod2=sqrt(outOriTemp[1].dot(outOriTemp[1]));
+                double dotans=inputOri[1].dot(outOriTemp[1]);
+                double angleLocal=acos(dotans/(mod1*mod2));
+                
+                if(inputOri[1].dot(outOriTemp[2])>0)
+                    angleLocal=-angleLocal;
+
+                if(angleLocal>PI/4 )//if angleLocal>0
+                {
+                    outOriTemp[2]=(inputOri[2]-inputOri[1]).normalize();
+                    outOriTemp[1]=(inputOri[2]+inputOri[1]).normalize();
+                    outPosTemp=inputN+linkLength*outOriTemp[2];
+                    angleLocal=PI/4;
+                }
+                else if(angleLocal<-PI/4)//if angleLocal<0
+                {
+                    outOriTemp[2]=(inputOri[2]+inputOri[1]).normalize();
+                    outOriTemp[1]=(inputOri[2]-inputOri[1]).normalize();
+                    outPosTemp=inputN+linkLength*outOriTemp[2];
+                    angleLocal=-PI/4;
+                }
+
+                *angleOutput=angleLocal;
+                outputOri[0]=outOriTemp[0];   
+                outputOri[2]=outOriTemp[2];
+                outputOri[1]=outOriTemp[1];
+                inputN_1=outPosTemp;
                 break;
             }
             case 3:
             {
-                *inputN_1=*inputN-linkLength*inputOri[2];
-                outputOri[2]=inputOri[2];
-                outputOri[0]=inputOri[0];
-                outputOri[1]=inputOri[1];
+                Vector3d delta=((inputN-inputN_1).normalize()).cross(inputOri[2]);
+                outOriTemp[2]=inputOri[2];
+                if(delta.dot(delta)<minOffset)
+                {
+                    //if the offset is very small
+                    outOriTemp[1]=outputOri[1];
+                    outOriTemp[0]=outputOri[0];
+                }
+                else
+                {
+                    //if the offset is large
+                    //two type of joint should be dealt with differently
+                    switch (TypeOfJoints[jointIndexNext])
+                    {
+                        case 2://type II
+                        {
+                            outOriTemp[0]=delta.normalize();
+                            if(outOriTemp[0].dot(inputOri[0])<0)
+                            {
+                                if(outOriTemp[0].dot(inputOri[1])<0)
+                                {
+                                    outOriTemp[0]=(inputOri[0]-inputOri[1]).normalize();
+                                }
+                                else
+                                {
+                                    outOriTemp[0]=(inputOri[0]+inputOri[1]).normalize();
+                                }
+                            }
+                            outOriTemp[1]=outOriTemp[2].cross(outOriTemp[0]);
+                        }
+                        case 1://type I
+                        {
+                            outOriTemp[1]=delta.normalize();
+                            if(outOriTemp[1].dot(inputOri[1])<0)
+                            {
+                                if(outOriTemp[1].dot(inputOri[0])<0)
+                                {
+                                    outOriTemp[1]=(inputOri[1]-inputOri[0]).normalize();
+                                }
+                                else
+                                {
+                                    outOriTemp[1]=(inputOri[0]+inputOri[1]).normalize();
+                                }
+                            }
+                            outOriTemp[0]=outOriTemp[1].cross(outOriTemp[2]);
+                        }
+                    }
+                    
+
+                    
+                    
+                }
+
+                double mod1=sqrt(inputOri[0].dot(inputOri[0]));
+                double mod2=sqrt(outOriTemp[0].dot(outOriTemp[0]));
+                double dotans=inputOri[0].dot(outOriTemp[0]);
+                double angleLocal=acos(dotans/(mod1*mod2));
+
+                if(inputOri[0].dot(outOriTemp[1])>0)
+                    angleLocal=-angleLocal;
+
+                if(angleLocal>PI/4)
+                {
+                    outOriTemp[1]=(inputOri[1]-inputOri[0]).normalize();
+                    outOriTemp[0]=(inputOri[1]+inputOri[0]).normalize();
+                    angleLocal=PI/4;
+                }
+                else if(angleLocal<-PI/4)//if angleLocal<0
+                {
+                    outOriTemp[1]=(inputOri[1]+inputOri[0]).normalize();
+                    outOriTemp[0]=(inputOri[1]-inputOri[0]).normalize();
+                    angleLocal=-PI/4;
+                }
+
+                *angleOutput=angleLocal;
+                outputOri[0]=outOriTemp[0];
+                outputOri[1]=outOriTemp[1];
+                inputN_1=inputN+linkLength*inputOri[2];
+                break;
             }
         }
     }
@@ -187,7 +323,7 @@ class FABRIK_Solver
                 double targetJointLength=sqrt(targetJointVec.dot(targetJointVec));
                 double lambda = LengthLink[i]/targetbaseLength;
                 PositionJoints[i+1]=(1-lambda)*PositionJoints[i]+lambda*PositionTarget;
-                OrientationCorrection(&PositionJoints[i],&PositionJoints[i+1],OrientationLink[i],OrientationLink[i+1],LengthLink[i],TypeOfJoints[i]);
+                OrientationCorrection(PositionJoints[i],PositionJoints[i+1],OrientationLink[i],OrientationLink[i+1],LengthLink[i],i,i+1,&AngleLinks[i]);
                 //I need to insert orientation correction operation
             }
             return 1;
@@ -207,7 +343,7 @@ class FABRIK_Solver
                     double deltalength=sqrt(deltavector.dot(deltavector));
                     double lambda=LengthLink[i]/deltalength;
                     PositionJoints[i]=(1-lambda)*PositionJoints[i+1]+lambda*PositionJoints[i];
-                    OrientationCorrection(&PositionJoints[i+1],&PositionJoints[i],OrientationLink[i+1],OrientationLink[i],LengthLink[i],TypeOfJoints[i]);
+                    OrientationCorrection(PositionJoints[i+1],PositionJoints[i],OrientationLink[i+1],OrientationLink[i],LengthLink[i],i+1,i,&AngleLinks[i]);
                     //I need to insert orientation operation
                 }
                 PositionJoints[0]=PositionBase;
@@ -217,7 +353,7 @@ class FABRIK_Solver
                     double deltalength=sqrt(deltavector.dot(deltavector));
                     double lambda=LengthLink[i]/deltalength;
                     PositionJoints[i+1]=(1-lambda)*PositionJoints[i]+lambda*PositionJoints[i+1];
-                    OrientationCorrection(&PositionJoints[i],&PositionJoints[i+1],OrientationLink[i],OrientationLink[i+1],LengthLink[i],TypeOfJoints[i]);
+                    OrientationCorrection(PositionJoints[i],PositionJoints[i+1],OrientationLink[i],OrientationLink[i+1],LengthLink[i],i,i+1,&AngleLinks[i]);
                     //I need to insert orientation operation
                 }
             }
@@ -236,7 +372,7 @@ class FABRIK_Solver
         OrientationLink[7][2] = InitialTargetOrientation[2];
     }
 
-    void GetAngles(double angles[7])//get angles of joints
+    void CalculateAngles()//get angles of joints
     {
         int refIndex = 0;
         for(int i=0;i<NumberJoints;i++)
@@ -244,14 +380,47 @@ class FABRIK_Solver
             double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
             double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
             double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
-            angles[i]=acos(dotans/(mod1*mod2));
+            AngleLinks[i]=acos(dotans/(mod1*mod2));
             if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
-                angles[i]=-angles[i];
+                AngleLinks[i]=-AngleLinks[i];
+        }
+    }
+    void CalculateAngles(int sign)//get angles of joints
+    {
+        int refIndex = 0;
+        for(int i=0;i<NumberJoints;i++)
+        {
+            double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
+            double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
+            double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
+            AngleLinks[i]=acos(dotans/(mod1*mod2));
+            if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
+                AngleLinks[i]=-AngleLinks[i];
+            if(sign<0)
+                AngleLinks[i]=-AngleLinks[i];
         }
     }
 };
 
+Vector3d InitialPositionJoints[7];
+Vector3d InitialTargetPosition;
+Vector3d InitialTargetOrientation[3];
+
+FABRIK_Solver mySolver=FABRIK_Solver(InitialPositionJoints, InitialTargetPosition, InitialTargetOrientation);
+
 void setup() {
+    InitialPositionJoints[0]={0,0,0};
+    InitialPositionJoints[1]={0,0,35};
+    InitialPositionJoints[2]={0,0,97};
+    InitialPositionJoints[3]={0,0,151};
+    InitialPositionJoints[4]={0,0,216};
+    InitialPositionJoints[5]={0,0,278};
+    InitialPositionJoints[6]={0,0,313};
+
+    InitialTargetPosition={50,50,280};
+    InitialTargetOrientation[0]= {1,0,0};
+    InitialTargetOrientation[1]= {0,1,0};
+    InitialTargetOrientation[0]= {0,0,1};
   // put your setup code here, to run once:
 
 }
