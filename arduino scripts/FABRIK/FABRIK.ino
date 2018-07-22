@@ -80,6 +80,10 @@ class Vector3d
             y=y/mod;
             z=z/mod;
         }
+        double mod()
+        {
+            return sqrt(x*x+y*y*z*z);
+        }
 };
 
 Vector3d operator*(double inputDouble, Vector3d inputVector3d)
@@ -92,11 +96,11 @@ class FABRIK_Solver
 {
     private:
     //enum {type1:1,type2:2,rotation:3};
-    enum JointType {XRotation = 1, YRotation = 2, AxisRotation = 3};//This is not used yet
     int NumberJoints = 7;//number of joints
     int NumberLinks = 6;//number of links
 
     Vector3d PositionJoints[7];//position of joints
+    enum JointType {XRotation = 1, YRotation = 2, AxisRotation = 3};//This is not used yet
     int TypeOfJoints[7]={3,1,1,1,2,2,3};//XRotation = 1, YRotation = 2, AxisRotation = 3
     Vector3d OrientationLink[8][3];//orientation of links, I use 3 vector to describe orientation of one link
     //orientation is expressed : P1, P2, F<--->0, 1, 2
@@ -105,12 +109,13 @@ class FABRIK_Solver
     double AngleLinks[7];
     double minOffset;
 
-    //Vector3d OrientationBase[3];//orientation of the base, should be set as some constant
+    Vector3d OrientationBase[3];//orientation of the base, should be set as some constant
     Vector3d PositionBase;//position of the base
-    //Vector3d OrientationTargrt[3];//orientation of the target
+    Vector3d OrientationTargrt[3];//orientation of the target
     Vector3d PositionTarget;//position of the target
 
     double tolorenceValue = 3;
+    double tolorenceValueOri = 0.05;
 
     //corrention of the orientation
     void OrientationCorrection(Vector3d inputN, Vector3d inputN_1, Vector3d inputOri[3],Vector3d outputOri[3], double linkLength, int jointIndex, int jointIndexNext, double* angleOutput)
@@ -300,6 +305,9 @@ class FABRIK_Solver
         OrientationLink[7][0] = InitialTargetOrientation[0];
         OrientationLink[7][1] = InitialTargetOrientation[1];
         OrientationLink[7][2] = InitialTargetOrientation[2];
+        OrientationTargrt[0] = InitialTargetOrientation[0];
+        OrientationTargrt[1] = InitialTargetOrientation[1];
+        OrientationTargrt[2] = InitialTargetOrientation[2];
         //initial statement
     }
 
@@ -317,6 +325,8 @@ class FABRIK_Solver
         if(targetbaseLength >= totalLength)
         {
             //means the target can not be reached
+            //forward reaching
+            //angle tolorence value should be considered
             for(int i=0;i<NumberJoints-1;i++)
             {
                 Vector3d targetJointVec=PositionTarget-PositionJoints[i];
@@ -326,6 +336,15 @@ class FABRIK_Solver
                 OrientationCorrection(PositionJoints[i],PositionJoints[i+1],OrientationLink[i],OrientationLink[i+1],LengthLink[i],i,i+1,&AngleLinks[i]);
                 //I need to insert orientation correction operation
             }
+            for(int i=NumberJoints-2;i>=0;i--)
+            {
+                Vector3d deltavector=PositionJoints[i+1]-PositionJoints[i];
+                double deltalength=sqrt(deltavector.dot(deltavector));
+                double lambda=LengthLink[i]/deltalength;
+                PositionJoints[i]=(1-lambda)*PositionJoints[i+1]+lambda*PositionJoints[i];
+                OrientationCorrection(PositionJoints[i+1],PositionJoints[i],OrientationLink[i+2],OrientationLink[i+1],LengthLink[i],i+1,i,&AngleLinks[i+1]);
+            }
+
             return 1;
         }
         else
@@ -333,17 +352,20 @@ class FABRIK_Solver
             //means the target can be reached
             PositionJoints[0]=PositionBase;
             //continue if error is not small enough and iteraion number is below max number
-            while((PositionJoints[6]-PositionTarget).dot(PositionJoints[6]-PositionTarget) >tolorenceValue && iterationNumber<MaxIteration)
+            double diffLength=(PositionJoints[6]-PositionTarget).dot(PositionJoints[6]-PositionTarget);
+            double diffOri1=(OrientationLink[7][0].cross(OrientationTargrt[0])).mod();
+            double diffOri2=(OrientationLink[7][1].cross(OrientationTargrt[1])).mod();
+            while((diffLength > tolorenceValue || diffOri1 > tolorenceValueOri || diffOri2 > tolorenceValueOri )&& iterationNumber<MaxIteration)
             {
                 //forward reaching
                 PositionJoints[6]=PositionTarget;
-                for(int i=5;i>=0;i--)
+                for(int i=NumberJoints-2;i>=0;i--)
                 {
                     Vector3d deltavector=PositionJoints[i+1]-PositionJoints[i];
                     double deltalength=sqrt(deltavector.dot(deltavector));
                     double lambda=LengthLink[i]/deltalength;
                     PositionJoints[i]=(1-lambda)*PositionJoints[i+1]+lambda*PositionJoints[i];
-                    OrientationCorrection(PositionJoints[i+1],PositionJoints[i],OrientationLink[i+1],OrientationLink[i],LengthLink[i],i+1,i,&AngleLinks[i]);
+                    OrientationCorrection(PositionJoints[i+1],PositionJoints[i],OrientationLink[i+2],OrientationLink[i+1],LengthLink[i],i+1,i,&AngleLinks[i+1]);
                     //I need to insert orientation operation
                 }
                 PositionJoints[0]=PositionBase;
@@ -367,65 +389,87 @@ class FABRIK_Solver
     void UpdateTarget(Vector3d InitialTargetPosition, Vector3d InitialTargetOrientation[3])//update position and orientation of the target
     {
         PositionTarget = InitialTargetPosition;
+        
+        OrientationTargrt[0] = InitialTargetOrientation[0];
+        OrientationTargrt[1] = InitialTargetOrientation[1];
+        OrientationTargrt[2] = InitialTargetOrientation[2];
         OrientationLink[7][0] = InitialTargetOrientation[0];
         OrientationLink[7][1] = InitialTargetOrientation[1];
         OrientationLink[7][2] = InitialTargetOrientation[2];
     }
 
-    void CalculateAngles()//get angles of joints
+    // should not be used
+    // void CalculateAngles()//get angles of joints
+    // {
+    //     int refIndex = 0;
+    //     for(int i=0;i<NumberJoints;i++)
+    //     {
+    //         double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
+    //         double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
+    //         double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
+    //         AngleLinks[i]=acos(dotans/(mod1*mod2));
+    //         if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
+    //             AngleLinks[i]=-AngleLinks[i];
+    //     }
+    // }
+    // void CalculateAngles(int sign)//get angles of joints
+    // {
+    //     int refIndex = 0;
+    //     for(int i=0;i<NumberJoints;i++)
+    //     {
+    //         double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
+    //         double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
+    //         double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
+    //         AngleLinks[i]=acos(dotans/(mod1*mod2));
+    //         if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
+    //             AngleLinks[i]=-AngleLinks[i];
+    //         if(sign<0)
+    //             AngleLinks[i]=-AngleLinks[i];
+    //     }
+    // }
+
+    double getAngle(int indexJoint, int sign)
     {
-        int refIndex = 0;
-        for(int i=0;i<NumberJoints;i++)
+        if(indexJoint>=0&&indexJoint<=6)
         {
-            double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
-            double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
-            double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
-            AngleLinks[i]=acos(dotans/(mod1*mod2));
-            if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
-                AngleLinks[i]=-AngleLinks[i];
-        }
-    }
-    void CalculateAngles(int sign)//get angles of joints
-    {
-        int refIndex = 0;
-        for(int i=0;i<NumberJoints;i++)
-        {
-            double mod1=OrientationLink[i][refIndex].dot(OrientationLink[i][refIndex]);
-            double mod2=OrientationLink[i+1][refIndex].dot(OrientationLink[i+1][refIndex]);
-            double dotans=OrientationLink[i][refIndex].dot(OrientationLink[i+1][refIndex]);
-            AngleLinks[i]=acos(dotans/(mod1*mod2));
-            if(OrientationLink[i][2].dot(OrientationLink[i+1][refIndex])<0)
-                AngleLinks[i]=-AngleLinks[i];
-            if(sign<0)
-                AngleLinks[i]=-AngleLinks[i];
+            if(sign>=0)
+            {
+                return AngleLinks[indexJoint];
+            }
+            else
+            {
+                return -AngleLinks[indexJoint];
+            }
         }
     }
 };
 
-Vector3d InitialPositionJoints[7];
-Vector3d InitialTargetPosition;
-Vector3d InitialTargetOrientation[3];
+Vector3d InitialPositionJoints[7]={{0,0,0},{0,0,35},{0,0,97},{0,0,151},{0,0,216},{0,0,278},{0,0,313}};
+Vector3d InitialTargetPosition={50,50,280};
+Vector3d InitialTargetOrientation[3]={{1,0,0},{0,1,0},{0,0,1}};
+//InitialTargetOrientation[0]= {1,0,0};
+//InitialTargetOrientation[1]= {0,1,0};
+//InitialTargetOrientation[2]= {0,0,1};
 
 FABRIK_Solver mySolver=FABRIK_Solver(InitialPositionJoints, InitialTargetPosition, InitialTargetOrientation);
 
-void setup() {
-    InitialPositionJoints[0]={0,0,0};
-    InitialPositionJoints[1]={0,0,35};
-    InitialPositionJoints[2]={0,0,97};
-    InitialPositionJoints[3]={0,0,151};
-    InitialPositionJoints[4]={0,0,216};
-    InitialPositionJoints[5]={0,0,278};
-    InitialPositionJoints[6]={0,0,313};
-
-    InitialTargetPosition={50,50,280};
-    InitialTargetOrientation[0]= {1,0,0};
-    InitialTargetOrientation[1]= {0,1,0};
-    InitialTargetOrientation[0]= {0,0,1};
+void setup()
+{
+    mySolver.Solve();
+    mySolver.getAngle(0,1);
   // put your setup code here, to run once:
 
 }
 
-void loop() {
+void loop() 
+{
+    Vector3d targetPosition={50,50,280};
+    Vector3d targetOrientation[3];
+    targetOrientation[0]={1,0,0};
+    targetOrientation[1]={0,1,0};
+    targetOrientation[2]={0,0,1};
+    mySolver.UpdateTarget(targetPosition, targetOrientation);
+    mySolver.Solve();
+    mySolver.getAngle(0,1);
   // put your main code here, to run repeatedly:
-
 }
