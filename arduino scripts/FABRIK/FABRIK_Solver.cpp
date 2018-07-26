@@ -84,15 +84,21 @@ Vector3d Vector3d::operator/(double coffi)
 	return ans;
 }
 
-Vector3d Vector3d::operator=(double in[3])
+Vector3d& Vector3d::operator=(double in[3])
 {
 	Vector3d ans = Vector3d(in[0], in[1], in[2]);
+	x = in[0];
+	y = in[1];
+	z = in[2];
 	return ans;
 }
 
-Vector3d Vector3d::operator=(Vector3d vector2)
+Vector3d& Vector3d::operator=(Vector3d vector2)
 {
 	Vector3d ans = Vector3d(vector2.x, vector2.y, vector2.z);
+	x = vector2.x;
+	y = vector2.y;
+	z = vector2.z;
 	return ans;
 }
 

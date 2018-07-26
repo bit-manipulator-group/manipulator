@@ -17,8 +17,8 @@ public:
 	Vector3d operator-(Vector3d vector2);
 	Vector3d operator*(double coffi);
 	Vector3d operator/(double coffi);
-	Vector3d operator=(double in[3]);
-	Vector3d operator=(Vector3d vector2);
+	Vector3d& operator=(double in[3]);
+	Vector3d& operator=(Vector3d vector2);
 	Vector3d Normalize();
 	double Mod();
 };
