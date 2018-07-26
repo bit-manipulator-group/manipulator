@@ -75,7 +75,7 @@ class Vector3d
         }
         Vector3d normalize()
         {
-            double mod=sqrt(x*x+y*y*z*z);//normlize the vector
+            double mod=sqrt(x*x+y*y+z*z);//normlize the vector
             x=x/mod;
             y=y/mod;
             z=z/mod;
@@ -444,9 +444,10 @@ class FABRIK_Solver
     }
 };
 
-Vector3d InitialPositionJoints[7]={{0,0,0},{0,0,35},{0,0,97},{0,0,151},{0,0,216},{0,0,278},{0,0,313}};
-Vector3d InitialTargetPosition={50,50,280};
-Vector3d InitialTargetOrientation[3]={{1,0,0},{0,1,0},{0,0,1}};
+Vector3d InitialPositionJoints[7]={{0.0,0.0,0.0},{0.0,0.0,35.0},{0.0,0.0,97.0},{0.0,0.0,151.0},{0.0,0.0,216.0},{0.0,0.0,278.0},{0.0,0.0,313.0}};
+Vector3d InitialTargetPosition={50.0,50.0,280.0};
+Vector3d InitialTargetOrientation[3]={{1.0,0.0,0.0},{0.0,1.0,0.0},{0.0,0.0,1.0}};
+
 //InitialTargetOrientation[0]= {1,0,0};
 //InitialTargetOrientation[1]= {0,1,0};
 //InitialTargetOrientation[2]= {0,0,1};
