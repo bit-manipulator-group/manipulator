@@ -12,6 +12,7 @@ FABRIK_Solver mySolver = FABRIK_Solver();
 Vector3d targetPosition1;
 Vector3d targetOrientation[3];
 String strGets = "";
+int numGets = 0;
 
 int indexcmds = 0;
 int pointPos = 0;
@@ -27,30 +28,31 @@ unsigned char Chs_MidPos1500[35];
 
 void setup() {
   // put your setup code here, to run once:
-
   Serial.begin(9600);
+
   delay(2);
+
   while (Serial.available() > 0)
   {
     Serial.read();
   }
+
   delay(2);
 
-  
+
 
   mySerial1.begin(9600);
   mySolver.Solve();
   Serial.println("Serial Port Initiated.");
 }
 
-
-void loop()
-{
+void loop() {
   if (Serial.available() > 0)
   {
     if (Serial.peek() != 'e')
     {
       strGets += char(Serial.read());
+      numGets++;
     }
     else
     {
@@ -64,7 +66,12 @@ void loop()
       for (int i = 0; i < 12; i++)//this works
         cmds[i] = 0;
 
-      for (int i = 0; i < strGets.length(); i++)
+      spacePos = 0;
+      pointPos = 0;
+      countflag = true;
+      negflag = false;
+      indexcmds = 0;
+      for (int i = 0; i < numGets; i++)
       {
         if (strGets[i] == ' ')
         {
@@ -95,12 +102,12 @@ void loop()
         }
         cmds[indexcmds] = cmds[indexcmds] * 10 + (strGets[i] - '0');
       }
-
+/*
       for (int i = 0; i < 12; i++)
       {
         Serial.println(cmds[i]);
-        delay(2);
       }
+*/
 
       targetPosition1 = {cmds[0], cmds[1], cmds[2]};//this works
       targetOrientation[0] = { cmds[3],   cmds[4],  cmds[5] };
@@ -111,7 +118,7 @@ void loop()
 
       for (int i = 0; i < 7; i++)
       {
-        //Serial.println(mySolver.GetAngle(i, sign[i]));
+        Serial.println(mySolver.GetAngle(i, sign[i]));
         //delay(2);
         outNum[i] = 1500 + (mySolver.GetAngle(i, sign[i]) / (Pi / 2)) * 1000;
         //Serial.println(outNum[i]);
@@ -125,14 +132,14 @@ void loop()
         Chs_MidPos1500[i * 5 + 3] = outNum[i] & 0xff;
         Chs_MidPos1500[i * 5 + 4] = (outNum[i] & 0xff00) >> 8;
       }
-
-      //mySerial1.write(Chs_MidPos1500, 35);
-      //delay(10);
+      
+      mySerial1.write(Chs_MidPos1500, 35);
 
       //execute main process
       //Serial.println(strGets);
       Serial.println("g");
       strGets = "";
+      numGets = 0;
     }
   }
 }
