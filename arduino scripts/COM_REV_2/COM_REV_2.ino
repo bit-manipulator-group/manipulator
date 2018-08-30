@@ -1,4 +1,6 @@
 #include<SoftwareSerial.h>
+#include<Wire.h>
+#include"JY901.h"
 #include<math.h>
 #include"FABRIK_Solver.h"
 #define Pi 3.1415926535
@@ -26,6 +28,14 @@ int outNum[7];
 
 unsigned char Chs_MidPos1500[35];
 
+double timeBase = 0;
+double timePrev = 0;
+double deltaTime = 0;
+Vector3d acc;
+Vector3d vcc;
+Vector3d position;
+Vector3d angle;
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
@@ -33,20 +43,24 @@ void setup() {
   delay(2);
 
   while (Serial.available() > 0)
-  {
     Serial.read();
-  }
 
   delay(2);
 
   mySerial1.begin(9600);
   mySolver.Solve();
+  JY901.StartIIC();
   Serial.println("Serial Port Initiated.");
 }
 
 void loop() {
-
   //execute main process
+  if (numGets < 20)
+  {
+    strGets = "";
+    numGets = 0;
+    return;
+  }
 
   for (int i = 0; i < 12; i++)//this works
     cmds[i] = 0;
@@ -87,6 +101,19 @@ void loop() {
     }
     cmds[indexcmds] = cmds[indexcmds] * 10 + (strGets[i] - '0');
   }
+  /*
+    JY901.GetAcc();
+    acc.SetValue((double)JY901.stcAcc.a[0] / 32768 * 16, (double)JY901.stcAcc.a[1] / 32768 * 16, (double)JY901.stcAcc.a[2] / 32768 * 16);
+    JY901.GetTime();
+    timeBase = (double)JY901.stcTime.ucSecond + (double)JY901.stcTime.usMiliSecond / 1000;
+    deltaTime = timeBase - timePrev;
+    vcc = vcc + acc * deltaTime;
+    position = position + vcc * deltaTime;
+    timePrev = timeBase;
+
+    JY901.GetAngle();
+    angle.SetValue((double)JY901.stcAngle.Angle[0] / 32768 * 16, (double)JY901.stcAngle.Angle[1] / 32768 * 16, (double)JY901.stcAngle.Angle[2] / 32768 * 16);
+  */
 
   targetPosition1 = {cmds[0], cmds[1], cmds[2]};//this works
   targetOrientation[0] = { cmds[3],   cmds[4],  cmds[5] };
